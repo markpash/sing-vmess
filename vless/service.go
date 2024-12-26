@@ -6,7 +6,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/sagernet/sing-vmess"
+	vmess "github.com/sagernet/sing-vmess"
 	"github.com/sagernet/sing/common/auth"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
@@ -68,17 +68,20 @@ func (s *Service[T]) NewConnection(ctx context.Context, conn net.Conn, metadata 
 	metadata.Destination = request.Destination
 
 	userFlow := s.userFlow[user]
-	if request.Flow == FlowVision && request.Command == vmess.NetworkUDP {
-		return E.New(FlowVision, " flow does not support UDP")
-	} else if request.Flow != userFlow {
+	if request.Flow != userFlow {
 		return E.New("flow mismatch: expected ", flowName(userFlow), ", but got ", flowName(request.Flow))
+	}
+
+	if request.Flow == FlowVision && request.Command == vmess.CommandUDP {
+		return E.New(FlowVision, " flow does not support UDP")
 	}
 
 	if request.Command == vmess.CommandUDP {
 		return s.handler.NewPacketConnection(ctx, &serverPacketConn{ExtendedConn: bufio.NewExtendedConn(conn), destination: request.Destination}, metadata)
 	}
+
 	responseConn := &serverConn{ExtendedConn: bufio.NewExtendedConn(conn), writer: bufio.NewVectorisedWriter(conn)}
-	switch userFlow {
+	switch request.Flow {
 	case FlowVision:
 		conn, err = NewVisionConn(responseConn, conn, request.UUID, s.logger)
 		if err != nil {
@@ -87,13 +90,13 @@ func (s *Service[T]) NewConnection(ctx context.Context, conn net.Conn, metadata 
 	case "":
 		conn = responseConn
 	default:
-		return E.New("unknown flow: ", userFlow)
+		return E.New("unknown flow: ", request.Flow)
 	}
 	switch request.Command {
 	case vmess.CommandTCP:
 		return s.handler.NewConnection(ctx, conn, metadata)
-	case vmess.CommandMux:
-		return vmess.HandleMuxConnection(ctx, conn, s.handler)
+	// case vmess.CommandMux:
+	// 	return vmess.HandleMuxConnection(ctx, conn, s.handler)
 	default:
 		return E.New("unknown command: ", request.Command)
 	}
