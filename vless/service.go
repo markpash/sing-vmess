@@ -95,8 +95,8 @@ func (s *Service[T]) NewConnection(ctx context.Context, conn net.Conn, metadata 
 	switch request.Command {
 	case vmess.CommandTCP:
 		return s.handler.NewConnection(ctx, conn, metadata)
-	// case vmess.CommandMux:
-	// 	return vmess.HandleMuxConnection(ctx, conn, s.handler)
+	case vmess.CommandMux:
+		return vmess.HandleMuxConnection(ctx, conn, s.handler)
 	default:
 		return E.New("unknown command: ", request.Command)
 	}
